@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include <curses.h>
+
+#include <unistd.h>
+
 #include "game.h"
 
 #define DISPLAY_WIDTH 800
@@ -75,6 +79,7 @@ void print_chars(char *chars)
 
 int main()
 {
+
     static char chars[CONSOLE_ROWS * CONSOLE_COLS] = {0};
 
     init();
@@ -85,16 +90,40 @@ int main()
     assert(display_height == DISPLAY_HEIGHT);
 
     uint32_t *pixels = get_display();
-    next_frame(0.0f);
     printf("Display %zux%zu at %p\n", display_width, display_height, pixels);
 
-    pixels_to_chars(chars, pixels);
-    print_chars(chars);
+    initscr();
+    cbreak();
+    noecho();
+    timeout(16);
+
+    int32_t x = DISPLAY_WIDTH / 2;
+    mouse_move(x, 0);
 
     while (1) {
         next_frame(1.0f / 60.0f);
         pixels_to_chars(chars, pixels);
-        print_chars(chars);
+
+        clear();
+        for (int row = 0; row < CONSOLE_ROWS; ++row) {
+            mvaddnstr(row, 0, &chars[row * CONSOLE_COLS], CONSOLE_COLS);
+        }
+        refresh();
+
+        int code = getch();
+        if (code == 'a') {
+            x -= 10;
+            mouse_move(x, 0);
+        } else if (code == 'd') {
+            x += 10;
+            mouse_move(x, 0);
+        } else if (code == ' ') {
+            mouse_click(x, 0);
+        } else if (code == 'p') {
+            toggle_pause();
+        }
+
+        usleep(16667);
     }
 
     return 0;
