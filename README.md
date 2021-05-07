@@ -1,5 +1,7 @@
 # Spin-off of [rust-browser-game-but-sdl] but with [ncurses]
 
+![thumbnail](./thumbnail.png)
+
 Nothing much to say. Just see [rust-browser-game-but-sdl] and [rust-browser-game].
 
 ## Quick Start
