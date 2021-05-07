@@ -37,7 +37,7 @@ const FONT_CHAR_WIDTH: usize = FONT_IMAGE_WIDTH / FONT_IMAGE_COLS;
 const FONT_CHAR_HEIGHT: usize = FONT_IMAGE_HEIGHT / FONT_IMAGE_ROWS;
 const BITS_IN_BYTE: usize = 8;
 const COPYRIGHT_TEXT: &[u8] = b"Made by Tsoding";
-const COPYRIGHT_SCALE: i32 = 2;
+const COPYRIGHT_SCALE: i32 = 3;
 const COPYRIGHT_PADDING: usize = 10;
 // Generated from `./charmap-oldschool_white.png`
 const COMPRESSED_FONT: [u8; 622] = [

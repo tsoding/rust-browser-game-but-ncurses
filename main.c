@@ -1,24 +1,32 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <curses.h>
 
 #include <unistd.h>
+#include <locale.h>
 
 #include "game.h"
 
 #define DISPLAY_WIDTH 800
 #define DISPLAY_HEIGHT 600
 #define CONSOLE_COLS 100
-#define CONSOLE_ROWS 40
+#define CONSOLE_ROWS 50
+static_assert(DISPLAY_WIDTH % CONSOLE_COLS == 0, "");
+static_assert(DISPLAY_HEIGHT % CONSOLE_ROWS == 0, "");
+
 #define CHAR_WIDTH_IN_PIXELS (DISPLAY_WIDTH / CONSOLE_COLS)
 #define CHAR_HEIGHT_IN_PIXELS (DISPLAY_HEIGHT / CONSOLE_ROWS)
+#define BRAILLE_DOTS_COLS 2
+#define BRAILLE_DOTS_ROWS 4
+#define BRAILLE_DOTS_COUNT (BRAILLE_DOTS_ROWS * BRAILLE_DOTS_COLS)
+static_assert(CHAR_WIDTH_IN_PIXELS % BRAILLE_DOTS_COLS == 0, "");
+static_assert(CHAR_HEIGHT_IN_PIXELS % BRAILLE_DOTS_ROWS == 0, "");
 
-static_assert(DISPLAY_WIDTH % CONSOLE_COLS == 0,
-              "Display width should divisible by console columns");
-static_assert(DISPLAY_HEIGHT % CONSOLE_ROWS == 0,
-              "Display height should divisible by console rows");
+#define BRAILLE_DOT_WIDTH_IN_PIXELS (CHAR_WIDTH_IN_PIXELS / BRAILLE_DOTS_COLS)
+#define BRAILLE_DOT_HEIGHT_IN_PIXELS (CHAR_HEIGHT_IN_PIXELS / BRAILLE_DOTS_ROWS)
 
 #define ABGR_ALPHA(pixel) ((pixel >> (3 * 8)) & 0xFF)
 #define ABGR_BLUE(pixel) ((pixel >> (2 * 8)) & 0xFF)
@@ -38,31 +46,311 @@ uint8_t abgr_bright(uint32_t pixel)
     return result;
 }
 
-const char bright_chars[] = {' ', '.', 'a', 'A', '#'};
-#define BRIGHT_CHARS_COUNT (sizeof(bright_chars) / sizeof(bright_chars[0]))
-static_assert(UINT8_MAX % BRIGHT_CHARS_COUNT == 0,
-              "We want the brightness of the pixels to be "
-              "divisible by the amount of brightness chars");
+typedef struct {
+    char bytes[3];
+} Braille;
 
-void pixels_to_chars(char *chars, uint32_t *pixels)
+#define BRAILLES_COUNT 256
+const Braille brailles[BRAILLES_COUNT] = {
+    {.bytes = "⠀"},
+    {.bytes = "⠁"},
+    {.bytes = "⠂"},
+    {.bytes = "⠃"},
+    {.bytes = "⠄"},
+    {.bytes = "⠅"},
+    {.bytes = "⠆"},
+    {.bytes = "⠇"},
+    {.bytes = "⠈"},
+    {.bytes = "⠉"},
+    {.bytes = "⠊"},
+    {.bytes = "⠋"},
+    {.bytes = "⠌"},
+    {.bytes = "⠍"},
+    {.bytes = "⠎"},
+    {.bytes = "⠏"},
+    {.bytes = "⠐"},
+    {.bytes = "⠑"},
+    {.bytes = "⠒"},
+    {.bytes = "⠓"},
+    {.bytes = "⠔"},
+    {.bytes = "⠕"},
+    {.bytes = "⠖"},
+    {.bytes = "⠗"},
+    {.bytes = "⠘"},
+    {.bytes = "⠙"},
+    {.bytes = "⠚"},
+    {.bytes = "⠛"},
+    {.bytes = "⠜"},
+    {.bytes = "⠝"},
+    {.bytes = "⠞"},
+    {.bytes = "⠟"},
+    {.bytes = "⠠"},
+    {.bytes = "⠡"},
+    {.bytes = "⠢"},
+    {.bytes = "⠣"},
+    {.bytes = "⠤"},
+    {.bytes = "⠥"},
+    {.bytes = "⠦"},
+    {.bytes = "⠧"},
+    {.bytes = "⠨"},
+    {.bytes = "⠩"},
+    {.bytes = "⠪"},
+    {.bytes = "⠫"},
+    {.bytes = "⠬"},
+    {.bytes = "⠭"},
+    {.bytes = "⠮"},
+    {.bytes = "⠯"},
+    {.bytes = "⠰"},
+    {.bytes = "⠱"},
+    {.bytes = "⠲"},
+    {.bytes = "⠳"},
+    {.bytes = "⠴"},
+    {.bytes = "⠵"},
+    {.bytes = "⠶"},
+    {.bytes = "⠷"},
+    {.bytes = "⠸"},
+    {.bytes = "⠹"},
+    {.bytes = "⠺"},
+    {.bytes = "⠻"},
+    {.bytes = "⠼"},
+    {.bytes = "⠽"},
+    {.bytes = "⠾"},
+    {.bytes = "⠿"},
+    {.bytes = "⡀"},
+    {.bytes = "⡁"},
+    {.bytes = "⡂"},
+    {.bytes = "⡃"},
+    {.bytes = "⡄"},
+    {.bytes = "⡅"},
+    {.bytes = "⡆"},
+    {.bytes = "⡇"},
+    {.bytes = "⡈"},
+    {.bytes = "⡉"},
+    {.bytes = "⡊"},
+    {.bytes = "⡋"},
+    {.bytes = "⡌"},
+    {.bytes = "⡍"},
+    {.bytes = "⡎"},
+    {.bytes = "⡏"},
+    {.bytes = "⡐"},
+    {.bytes = "⡑"},
+    {.bytes = "⡒"},
+    {.bytes = "⡓"},
+    {.bytes = "⡔"},
+    {.bytes = "⡕"},
+    {.bytes = "⡖"},
+    {.bytes = "⡗"},
+    {.bytes = "⡘"},
+    {.bytes = "⡙"},
+    {.bytes = "⡚"},
+    {.bytes = "⡛"},
+    {.bytes = "⡜"},
+    {.bytes = "⡝"},
+    {.bytes = "⡞"},
+    {.bytes = "⡟"},
+    {.bytes = "⡠"},
+    {.bytes = "⡡"},
+    {.bytes = "⡢"},
+    {.bytes = "⡣"},
+    {.bytes = "⡤"},
+    {.bytes = "⡥"},
+    {.bytes = "⡦"},
+    {.bytes = "⡧"},
+    {.bytes = "⡨"},
+    {.bytes = "⡩"},
+    {.bytes = "⡪"},
+    {.bytes = "⡫"},
+    {.bytes = "⡬"},
+    {.bytes = "⡭"},
+    {.bytes = "⡮"},
+    {.bytes = "⡯"},
+    {.bytes = "⡰"},
+    {.bytes = "⡱"},
+    {.bytes = "⡲"},
+    {.bytes = "⡳"},
+    {.bytes = "⡴"},
+    {.bytes = "⡵"},
+    {.bytes = "⡶"},
+    {.bytes = "⡷"},
+    {.bytes = "⡸"},
+    {.bytes = "⡹"},
+    {.bytes = "⡺"},
+    {.bytes = "⡻"},
+    {.bytes = "⡼"},
+    {.bytes = "⡽"},
+    {.bytes = "⡾"},
+    {.bytes = "⡿"},
+    {.bytes = "⢀"},
+    {.bytes = "⢁"},
+    {.bytes = "⢂"},
+    {.bytes = "⢃"},
+    {.bytes = "⢄"},
+    {.bytes = "⢅"},
+    {.bytes = "⢆"},
+    {.bytes = "⢇"},
+    {.bytes = "⢈"},
+    {.bytes = "⢉"},
+    {.bytes = "⢊"},
+    {.bytes = "⢋"},
+    {.bytes = "⢌"},
+    {.bytes = "⢍"},
+    {.bytes = "⢎"},
+    {.bytes = "⢏"},
+    {.bytes = "⢐"},
+    {.bytes = "⢑"},
+    {.bytes = "⢒"},
+    {.bytes = "⢓"},
+    {.bytes = "⢔"},
+    {.bytes = "⢕"},
+    {.bytes = "⢖"},
+    {.bytes = "⢗"},
+    {.bytes = "⢘"},
+    {.bytes = "⢙"},
+    {.bytes = "⢚"},
+    {.bytes = "⢛"},
+    {.bytes = "⢜"},
+    {.bytes = "⢝"},
+    {.bytes = "⢞"},
+    {.bytes = "⢟"},
+    {.bytes = "⢠"},
+    {.bytes = "⢡"},
+    {.bytes = "⢢"},
+    {.bytes = "⢣"},
+    {.bytes = "⢤"},
+    {.bytes = "⢥"},
+    {.bytes = "⢦"},
+    {.bytes = "⢧"},
+    {.bytes = "⢨"},
+    {.bytes = "⢩"},
+    {.bytes = "⢪"},
+    {.bytes = "⢫"},
+    {.bytes = "⢬"},
+    {.bytes = "⢭"},
+    {.bytes = "⢮"},
+    {.bytes = "⢯"},
+    {.bytes = "⢰"},
+    {.bytes = "⢱"},
+    {.bytes = "⢲"},
+    {.bytes = "⢳"},
+    {.bytes = "⢴"},
+    {.bytes = "⢵"},
+    {.bytes = "⢶"},
+    {.bytes = "⢷"},
+    {.bytes = "⢸"},
+    {.bytes = "⢹"},
+    {.bytes = "⢺"},
+    {.bytes = "⢻"},
+    {.bytes = "⢼"},
+    {.bytes = "⢽"},
+    {.bytes = "⢾"},
+    {.bytes = "⢿"},
+    {.bytes = "⣀"},
+    {.bytes = "⣁"},
+    {.bytes = "⣂"},
+    {.bytes = "⣃"},
+    {.bytes = "⣄"},
+    {.bytes = "⣅"},
+    {.bytes = "⣆"},
+    {.bytes = "⣇"},
+    {.bytes = "⣈"},
+    {.bytes = "⣉"},
+    {.bytes = "⣊"},
+    {.bytes = "⣋"},
+    {.bytes = "⣌"},
+    {.bytes = "⣍"},
+    {.bytes = "⣎"},
+    {.bytes = "⣏"},
+    {.bytes = "⣐"},
+    {.bytes = "⣑"},
+    {.bytes = "⣒"},
+    {.bytes = "⣓"},
+    {.bytes = "⣔"},
+    {.bytes = "⣕"},
+    {.bytes = "⣖"},
+    {.bytes = "⣗"},
+    {.bytes = "⣘"},
+    {.bytes = "⣙"},
+    {.bytes = "⣚"},
+    {.bytes = "⣛"},
+    {.bytes = "⣜"},
+    {.bytes = "⣝"},
+    {.bytes = "⣞"},
+    {.bytes = "⣟"},
+    {.bytes = "⣠"},
+    {.bytes = "⣡"},
+    {.bytes = "⣢"},
+    {.bytes = "⣣"},
+    {.bytes = "⣤"},
+    {.bytes = "⣥"},
+    {.bytes = "⣦"},
+    {.bytes = "⣧"},
+    {.bytes = "⣨"},
+    {.bytes = "⣩"},
+    {.bytes = "⣪"},
+    {.bytes = "⣫"},
+    {.bytes = "⣬"},
+    {.bytes = "⣭"},
+    {.bytes = "⣮"},
+    {.bytes = "⣯"},
+    {.bytes = "⣰"},
+    {.bytes = "⣱"},
+    {.bytes = "⣲"},
+    {.bytes = "⣳"},
+    {.bytes = "⣴"},
+    {.bytes = "⣵"},
+    {.bytes = "⣶"},
+    {.bytes = "⣷"},
+    {.bytes = "⣸"},
+    {.bytes = "⣹"},
+    {.bytes = "⣺"},
+    {.bytes = "⣻"},
+    {.bytes = "⣼"},
+    {.bytes = "⣽"},
+    {.bytes = "⣾"},
+    {.bytes = "⣿"}
+};
+
+size_t braille_index(uint8_t x)
+{
+    const size_t group_size = 64;
+    const size_t bgroup = ((x & 0b00001000) >> 3) | ((x & 0b10000000) >> 6);
+    const size_t boffset = (x & 0b00000111) | ((x & 0b01110000) >> 1);
+    return bgroup * group_size + boffset;
+}
+
+void pixels_to_braille_chars(Braille *output, uint32_t *input)
 {
     for (int row = 0; row < CONSOLE_ROWS; ++row) {
         for (int col = 0; col < CONSOLE_COLS; ++col) {
-            uint32_t bright_sum = 0;
-            for (int y = 0; y < CHAR_HEIGHT_IN_PIXELS; ++y) {
-                for (int x = 0; x < CHAR_WIDTH_IN_PIXELS; ++x) {
-                    const size_t pixel_x = col * CHAR_WIDTH_IN_PIXELS;
-                    const size_t pixel_y = row * CHAR_HEIGHT_IN_PIXELS;
-                    const size_t index = pixel_y * DISPLAY_WIDTH + pixel_x;
-                    bright_sum += abgr_bright(pixels[index]);
+            uint8_t braille_mask = 0;
+
+            for (int dot_index = 0; dot_index < BRAILLE_DOTS_COUNT; ++dot_index) {
+                const int dot_col = dot_index / BRAILLE_DOTS_ROWS;
+                const int dot_row = dot_index % BRAILLE_DOTS_ROWS;
+                uint32_t bright_sum = 0;
+                for (int y = 0; y < BRAILLE_DOT_HEIGHT_IN_PIXELS; ++y) {
+                    for (int x = 0; x < BRAILLE_DOT_WIDTH_IN_PIXELS; ++x) {
+                        const int pixel_x =
+                            col * CHAR_WIDTH_IN_PIXELS +
+                            dot_col * BRAILLE_DOT_WIDTH_IN_PIXELS +
+                            x;
+                        const int pixel_y =
+                            row * CHAR_HEIGHT_IN_PIXELS +
+                            dot_row * BRAILLE_DOT_HEIGHT_IN_PIXELS +
+                            y;
+                        const int index = pixel_y * DISPLAY_WIDTH + pixel_x;
+                        bright_sum += abgr_bright(input[index]);
+                    }
+                }
+
+                bright_sum /= BRAILLE_DOT_WIDTH_IN_PIXELS * BRAILLE_DOT_HEIGHT_IN_PIXELS;
+                assert(bright_sum <= UINT8_MAX);
+                if (bright_sum >= 126) {
+                    braille_mask |= (1 << dot_index);
                 }
             }
-            bright_sum /= CHAR_WIDTH_IN_PIXELS * CHAR_HEIGHT_IN_PIXELS;
-            assert(bright_sum <= UINT8_MAX);
-            const uint8_t t = 255 / BRIGHT_CHARS_COUNT;
-            const uint8_t bright_index = bright_sum / t;
-            assert(bright_index < BRIGHT_CHARS_COUNT);
-            chars[row * CONSOLE_COLS + col] = bright_chars[bright_index];
+
+            output[row * CONSOLE_COLS + col] = brailles[braille_index(braille_mask)];
         }
     }
 }
@@ -79,8 +367,9 @@ void print_chars(char *chars)
 
 int main()
 {
+    setlocale(LC_ALL, "");
 
-    static char chars[CONSOLE_ROWS * CONSOLE_COLS] = {0};
+    static Braille output[CONSOLE_ROWS * CONSOLE_COLS] = {0};
 
     init();
 
@@ -92,30 +381,31 @@ int main()
     uint32_t *pixels = get_display();
     printf("Display %zux%zu at %p\n", display_width, display_height, pixels);
 
+    size_t fps = 60;
+
     initscr();
     cbreak();
     noecho();
-    timeout(16);
+    timeout(1000 / fps);
 
     int32_t x = DISPLAY_WIDTH / 2;
     mouse_move(x, 0);
 
     while (1) {
         next_frame(1.0f / 60.0f);
-        pixels_to_chars(chars, pixels);
+        pixels_to_braille_chars(output, pixels);
 
-        clear();
         for (int row = 0; row < CONSOLE_ROWS; ++row) {
-            mvaddnstr(row, 0, &chars[row * CONSOLE_COLS], CONSOLE_COLS);
+            mvaddnstr(row, 0, (char*) &output[row * CONSOLE_COLS], CONSOLE_COLS * sizeof(output[0]));
         }
         refresh();
 
         int code = getch();
         if (code == 'a') {
-            x -= 10;
+            x -= 20;
             mouse_move(x, 0);
         } else if (code == 'd') {
-            x += 10;
+            x += 20;
             mouse_move(x, 0);
         } else if (code == ' ') {
             mouse_click(x, 0);
@@ -123,7 +413,7 @@ int main()
             toggle_pause();
         }
 
-        usleep(16667);
+        usleep(1000000 / fps);
     }
 
     return 0;
