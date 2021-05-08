@@ -15,11 +15,11 @@ const PLAYER_SIZE: i32 = 80;
 const PLAYER_COLOR: Pixel = Pixel::rgba(0xDF, 0xAF, 0x8F, 0xFF);
 const PLAYER_KILL_REWARD: usize = 100;
 const BULLET_SIZE: i32 = 25;
-const BULLET_SPEED: i32 = 20;
+const BULLET_SPEED: i32 = DISPLAY_HEIGHT as i32 * 2;
 const BULLET_COLOR: Pixel = Pixel::rgba(0xEC, 0xB3, 0xB3, 0xFF);
 const ENEMY_SIZE: i32 = 100;
 const ENEMY_COLOR: Pixel = Pixel::rgba(0x7C, 0xB8, 0xBB, 0xFF);
-const ENEMY_SPEED: i32 = 5;
+const ENEMY_SPEED: i32 = DISPLAY_HEIGHT as i32 / 2;
 const SCORE_LABEL_COLOR: Pixel = Pixel::rgba(0xDC, 0xDC, 0xCC, 0xFF);
 const SCORE_LABEL_PADDING: i32 = 17;
 const SCORE_LABEL_X: i32 = SCORE_LABEL_PADDING;
@@ -37,7 +37,7 @@ const FONT_CHAR_WIDTH: usize = FONT_IMAGE_WIDTH / FONT_IMAGE_COLS;
 const FONT_CHAR_HEIGHT: usize = FONT_IMAGE_HEIGHT / FONT_IMAGE_ROWS;
 const BITS_IN_BYTE: usize = 8;
 const COPYRIGHT_TEXT: &[u8] = b"Made by Tsoding";
-const COPYRIGHT_SCALE: i32 = 3;
+const COPYRIGHT_SCALE: i32 = 2;
 const COPYRIGHT_PADDING: usize = 10;
 // Generated from `./charmap-oldschool_white.png`
 const COMPRESSED_FONT: [u8; 622] = [
@@ -411,7 +411,7 @@ impl State {
         if !self.pause {
             for bullet in self.bullets.iter_mut() {
                 if bullet.alive {
-                    bullet.y -= BULLET_SPEED;
+                    bullet.y -= (BULLET_SPEED as f32 * dt) as i32;
                     if bullet.y - BULLET_SIZE / 2 < 0 {
                         bullet.alive = false
                     }
@@ -423,7 +423,7 @@ impl State {
                     // Update Enemy's position and despawn it if it
                     // went outside of the screen
                     {
-                        enemy.y += ENEMY_SPEED;
+                        enemy.y += (ENEMY_SPEED as f32 * dt) as i32;
                         if enemy.y - ENEMY_SIZE / 2 > DISPLAY_HEIGHT as i32 {
                             enemy.alive = false
                         }
