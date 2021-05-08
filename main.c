@@ -381,18 +381,18 @@ int main()
     uint32_t *pixels = get_display();
     printf("Display %zux%zu at %p\n", display_width, display_height, pixels);
 
-    size_t fps = 60;
+    const size_t fps = 15;
 
     initscr();
     cbreak();
     noecho();
-    timeout(1000 / fps);
+    timeout(0);
 
     int32_t x = DISPLAY_WIDTH / 2;
     mouse_move(x, 0);
 
     while (1) {
-        next_frame(1.0f / 60.0f);
+        next_frame(1.0f / (float) fps);
         pixels_to_braille_chars(output, pixels);
 
         for (int row = 0; row < CONSOLE_ROWS; ++row) {
@@ -402,10 +402,10 @@ int main()
 
         int code = getch();
         if (code == 'a') {
-            x -= 20;
+            x -= 30;
             mouse_move(x, 0);
         } else if (code == 'd') {
-            x += 20;
+            x += 30;
             mouse_move(x, 0);
         } else if (code == ' ') {
             mouse_click(x, 0);
